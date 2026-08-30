@@ -1,19 +1,26 @@
+#include "game.h"
 #include <raylib.h>
-#include <iostream>
 
-int main() 
+// Configura Raylib y mantiene un ciclo principal pequeño que delega en Game.
+int main(int argc, char **)
 {
-      InitWindow(800, 600, "Hello Raylib");
-      SetTargetFPS(60);
-   
-      while (!WindowShouldClose()) 
-      {
-         BeginDrawing();
-         ClearBackground(RAYWHITE);
-         DrawText("Hello, Raylib!", 190, 200, 20, LIGHTGRAY);
-         EndDrawing();
-      }
-   
-      CloseWindow();
-   return 0;
+    const bool smokeTest = argc > 1;
+    unsigned int flags = FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT;
+    if (smokeTest) flags |= FLAG_WINDOW_HIDDEN;
+    SetConfigFlags(flags);
+    InitWindow(1280, 720, "Red Shift Tetris");
+    SetExitKey(KEY_NULL);
+    SetTargetFPS(60);
+
+    {
+        Game game(smokeTest);
+        while (!WindowShouldClose() && !game.IsSmokeTestFinished())
+        {
+            game.Update();
+            game.Draw();
+        }
+    }
+
+    CloseWindow();
+    return 0;
 }
