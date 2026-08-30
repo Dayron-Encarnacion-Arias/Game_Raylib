@@ -21,12 +21,15 @@
 #
 #**************************************************************************************************
 
-.PHONY: all clean
+# Adapted for Red Shift Tetris: C++ sources are organized by responsibility,
+# intermediate files are written to build/ and final executables to bin/.
+
+.PHONY: all run clean
 
 # Define required raylib variables
-PROJECT_NAME       ?= game
-RAYLIB_VERSION     ?= 5.0.0
-RAYLIB_PATH        ?= ..\..
+PROJECT_NAME       ?= red_shift_tetris
+RAYLIB_VERSION     ?= 6.0.0
+RAYLIB_PATH        ?= C:/raylib/raylib
 
 # Define compiler path on Windows
 COMPILER_PATH      ?= C:/raylib/w64devkit/bin
@@ -99,6 +102,11 @@ ifeq ($(PLATFORM),PLATFORM_RPI)
     endif
 endif
 
+# Windows requires an explicit extension because OUTPUT is also used by copy and clean rules.
+ifeq ($(PLATFORM_OS),WINDOWS)
+    EXT = .exe
+endif
+
 # RAYLIB_PATH adjustment for different platforms.
 # If using GNU make, we can get the full path to the top of the tree. Windows? BSD?
 # Required for ldconfig or other tools that do not perform path expansion.
@@ -128,7 +136,7 @@ endif
 
 # Define raylib release directory for compiled library.
 # RAYLIB_RELEASE_PATH points to provided binaries or your freshly built version
-RAYLIB_RELEASE_PATH 	?= $(RAYLIB_PATH)/src
+RAYLIB_RELEASE_PATH    ?= $(RAYLIB_PATH)/src
 
 # EXAMPLE_RUNTIME_PATH embeds a custom runtime location of libraylib.so or other desired libraries
 # into each example binary compiled with RAYLIB_LIBTYPE=SHARED. It defaults to RAYLIB_RELEASE_PATH
@@ -149,6 +157,10 @@ EXAMPLE_RUNTIME_PATH   ?= $(RAYLIB_RELEASE_PATH)
 CC = g++
 
 ifeq ($(PLATFORM),PLATFORM_DESKTOP)
+    ifeq ($(PLATFORM_OS),WINDOWS)
+        # Use the compiler distributed with the local w64devkit installation.
+        CC = $(COMPILER_PATH)/g++.exe
+    endif
     ifeq ($(PLATFORM_OS),OSX)
         # OSX default compiler
         CC = clang++
@@ -167,7 +179,7 @@ ifeq ($(PLATFORM),PLATFORM_RPI)
 endif
 ifeq ($(PLATFORM),PLATFORM_WEB)
     # HTML5 emscripten compiler
-    # WARNING: To compile to HTML5, code must be redesigned 
+    # WARNING: To compile to HTML5, code must be redesigned
     # to use emscripten.h and emscripten_set_main_loop()
     CC = emcc
 endif
@@ -194,21 +206,23 @@ endif
 #  -std=gnu99           defines C language mode (GNU C from 1999 revision)
 #  -Wno-missing-braces  ignore invalid warning (GCC bug 53119)
 #  -D_DEFAULT_SOURCE    use with -std=c99 on Linux and PLATFORM_WEB, required for timespec
-CFLAGS += -Wall -std=c++14 -D_DEFAULT_SOURCE -Wno-missing-braces
+CFLAGS += -Wall -Wextra -std=c++14 -D_DEFAULT_SOURCE -Wno-missing-braces -MMD -MP
 
 ifeq ($(BUILD_MODE),DEBUG)
-    CFLAGS += -g -O0
+    CFLAGS += -g3 -O0
+    BUILD_DIR = build/debug
 else
     CFLAGS += -s -O1
+    BUILD_DIR = build/release
 endif
 
 # Additional flags for compiler (if desired)
 #CFLAGS += -Wextra -Wmissing-prototypes -Wstrict-prototypes
 ifeq ($(PLATFORM),PLATFORM_DESKTOP)
     ifeq ($(PLATFORM_OS),WINDOWS)
-        # resource file contains windows executable icon and properties
-        # -Wl,--subsystem,windows hides the console window
-        CFLAGS += $(RAYLIB_PATH)/src/raylib.rc.data
+        # Resource file contains Windows executable icon and properties.
+        # Kept outside CFLAGS so it is only added during the link step.
+        PROJECT_RESOURCES += $(RAYLIB_PATH)/src/raylib.rc.data
     endif
     ifeq ($(PLATFORM_OS),LINUX)
         ifeq ($(RAYLIB_LIBTYPE),STATIC)
@@ -250,7 +264,7 @@ endif
 
 # Define include paths for required headers
 # NOTE: Several external required libraries (stb and others)
-INCLUDE_PATHS = -I. -I$(RAYLIB_PATH)/src -I$(RAYLIB_PATH)/src/external
+INCLUDE_PATHS = -I. -Iinclude -Ilevels -I$(RAYLIB_PATH)/src -I$(RAYLIB_PATH)/src/external
 ifneq ($(wildcard /opt/homebrew/include/.*),)
     INCLUDE_PATHS += -I/opt/homebrew/include
 endif
@@ -270,7 +284,7 @@ ifeq ($(PLATFORM),PLATFORM_DESKTOP)
     ifeq ($(PLATFORM_OS),LINUX)
         # Reset everything.
         # Precedence: immediately local, installed version, raysan5 provided libs -I$(RAYLIB_H_INSTALL_PATH) -I$(RAYLIB_PATH)/release/include
-        INCLUDE_PATHS = -I$(RAYLIB_H_INSTALL_PATH) -isystem. -isystem$(RAYLIB_PATH)/src -isystem$(RAYLIB_PATH)/release/include -isystem$(RAYLIB_PATH)/src/external
+        INCLUDE_PATHS = -Iinclude -Ilevels -I$(RAYLIB_H_INSTALL_PATH) -isystem. -isystem$(RAYLIB_PATH)/src -isystem$(RAYLIB_PATH)/release/include -isystem$(RAYLIB_PATH)/src/external
     endif
 endif
 
@@ -309,7 +323,7 @@ ifeq ($(PLATFORM),PLATFORM_DESKTOP)
     ifeq ($(PLATFORM_OS),WINDOWS)
         # Libraries for Windows desktop compilation
         # NOTE: WinMM library required to set high-res timer resolution
-        LDLIBS = -lraylib -lopengl32 -lgdi32 -lwinmm
+        LDLIBS = -static-libgcc -static-libstdc++ -lraylib -lopengl32 -lgdi32 -lwinmm
         # Required for physac examples
         #LDLIBS += -static -lpthread
     endif
@@ -317,12 +331,12 @@ ifeq ($(PLATFORM),PLATFORM_DESKTOP)
         # Libraries for Debian GNU/Linux desktop compiling
         # NOTE: Required packages: libegl1-mesa-dev
         LDLIBS = -lraylib -lGL -lm -lpthread -ldl -lrt
-        
+
         # On X11 requires also below libraries
         LDLIBS += -lX11
         # NOTE: It seems additional libraries are not required any more, latest GLFW just dlopen them
         #LDLIBS += -lXrandr -lXinerama -lXi -lXxf86vm -lXcursor
-        
+
         # On Wayland windowing system, additional libraries requires
         ifeq ($(USE_WAYLAND_DISPLAY),TRUE)
             LDLIBS += -lwayland-client -lwayland-cursor -lwayland-egl -lxkbcommon
@@ -363,59 +377,81 @@ endif
 # Define a recursive wildcard function
 rwildcard=$(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2) $(filter $(subst *,%,$2),$d))
 
-# Define all source files required
+# Define all source files required by Red Shift Tetris.
 SRC_DIR = src
-OBJ_DIR = obj
+SRC = src/main.cpp \
+      $(wildcard src/core/*.cpp) \
+      $(wildcard src/physics/*.cpp) \
+      $(wildcard src/graphics/*.cpp) \
+      $(wildcard src/data/*.cpp) \
+      levels/level.cpp
 
-# Define all object files from source files
-SRC = $(call rwildcard, *.c, *.h)
-#OBJS = $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
-OBJS ?= main.c
+# Mirror the source hierarchy inside the selected build directory.
+OBJS = $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(SRC))
+DEPS = $(OBJS:.o=.d)
+OUTPUT = bin/$(PROJECT_NAME)$(EXT)
+ROOT_OUTPUT = main$(EXT)
 
 # For Android platform we call a custom Makefile.Android
 ifeq ($(PLATFORM),PLATFORM_ANDROID)
-    MAKEFILE_PARAMS = -f Makefile.Android 
+    MAKEFILE_PARAMS = -f Makefile.Android
     export PROJECT_NAME
     export SRC_DIR
 else
     MAKEFILE_PARAMS = $(PROJECT_NAME)
 endif
 
-# Default target entry
-# NOTE: We call this Makefile target or Makefile.Android target
+# Default target entry.
+ifeq ($(PLATFORM),PLATFORM_ANDROID)
 all:
 	$(MAKE) $(MAKEFILE_PARAMS)
+else
+all: $(OUTPUT) $(ROOT_OUTPUT)
+endif
 
-# Project target defined by PROJECT_NAME
-$(PROJECT_NAME): $(OBJS)
-	$(CC) -o $(PROJECT_NAME)$(EXT) $(OBJS) $(CFLAGS) $(INCLUDE_PATHS) $(LDFLAGS) $(LDLIBS) -D$(PLATFORM)
+# Link all project modules and write the final executable to bin/.
+$(OUTPUT): $(OBJS)
+ifeq ($(OS),Windows_NT)
+	@if not exist bin mkdir bin
+else
+	@mkdir -p bin
+endif
+	$(CC) -o $(OUTPUT) $(OBJS) $(PROJECT_RESOURCES) $(CFLAGS) $(INCLUDE_PATHS) $(LDFLAGS) $(LDLIBS) -D$(PLATFORM)
 
-# Compile source files
-# NOTE: This pattern will compile every module defined on $(OBJS)
-#%.o: %.c
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+# Compile every C++ module into a matching path below build/debug or build/release.
+$(BUILD_DIR)/%.o: %.cpp Makefile
+ifeq ($(OS),Windows_NT)
+	@powershell.exe -NoProfile -Command "New-Item -ItemType Directory -Force -Path '$(dir $@)' | Out-Null"
+else
+	@mkdir -p $(dir $@)
+endif
 	$(CC) -c $< -o $@ $(CFLAGS) $(INCLUDE_PATHS) -D$(PLATFORM)
 
-# Clean everything
+# Keep main.exe as a convenient entry point for the current VS Code workflow.
+$(ROOT_OUTPUT): $(OUTPUT)
+ifeq ($(OS),Windows_NT)
+	@powershell.exe -NoProfile -Command "Copy-Item -LiteralPath '$(OUTPUT)' -Destination '$(ROOT_OUTPUT)' -Force"
+else
+	@cp $(OUTPUT) $(ROOT_OUTPUT)
+endif
+
+# Build and launch the game.
+run: all
+ifeq ($(OS),Windows_NT)
+	$(ROOT_OUTPUT)
+else
+	./$(ROOT_OUTPUT)
+endif
+
+# Clean generated files without removing build/.gitkeep.
 clean:
-ifeq ($(PLATFORM),PLATFORM_DESKTOP)
-    ifeq ($(PLATFORM_OS),WINDOWS)
-		del *.o *.exe /s
-    endif
-    ifeq ($(PLATFORM_OS),LINUX)
-	find -type f -executable | xargs file -i | grep -E 'x-object|x-archive|x-sharedlib|x-executable' | rev | cut -d ':' -f 2- | rev | xargs rm -fv
-    endif
-    ifeq ($(PLATFORM_OS),OSX)
-		find . -type f -perm +ugo+x -delete
-		rm -f *.o
-    endif
-endif
-ifeq ($(PLATFORM),PLATFORM_RPI)
-	find . -type f -executable -delete
-	rm -fv *.o
-endif
-ifeq ($(PLATFORM),PLATFORM_WEB)
-	del *.o *.html *.js
+ifeq ($(OS),Windows_NT)
+	@powershell.exe -NoProfile -Command "if (Test-Path -LiteralPath 'build/debug') { Remove-Item -LiteralPath 'build/debug' -Recurse -Force }; if (Test-Path -LiteralPath 'build/release') { Remove-Item -LiteralPath 'build/release' -Recurse -Force }; if (Test-Path -LiteralPath 'bin/$(PROJECT_NAME).exe') { Remove-Item -LiteralPath 'bin/$(PROJECT_NAME).exe' -Force }; if (Test-Path -LiteralPath 'main.exe') { Remove-Item -LiteralPath 'main.exe' -Force }"
+else
+	@rm -rf build/debug build/release
+	@rm -f $(OUTPUT) $(ROOT_OUTPUT)
 endif
 	@echo Cleaning done
 
+# Dependency files make incremental builds react to header changes.
+-include $(DEPS)
