@@ -39,6 +39,10 @@ private:
     void CompleteLevel();
     void EndGame();
     void ResetBoard();
+    void EnterTryHard();
+    void ExitTryHard();
+    bool IsLevelAvailable(int level) const;
+    bool IsAccessoryAvailable(int accessory) const;
     void UpdateScore(int clearedRows, int dropPoints);
     Block GetRandomBlock();
     std::vector<Block> GetAllBlocks() const;
@@ -81,6 +85,7 @@ private:
     bool paused;
     bool won;
     bool newUnlock;
+    bool tryHardMode;
     bool smokeTest;
     int smokeFrame;
     RenderTexture2D renderTarget;

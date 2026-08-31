@@ -17,6 +17,7 @@ de este proyecto fueron implementados desde cero.
 - Dificultad Fácil, Normal o Difícil seleccionable para cada nivel.
 - Personaje personalizable con cinco colores.
 - Diez accesorios que se desbloquean al superar los diez niveles.
+- Modo administrativo `TryHard` para revisar temporalmente todo el contenido desbloqueado.
 - Personaje animado haciendo una pose distinta junto a cada tarjeta de nivel.
 - Mejores puntuaciones y progreso guardados automáticamente.
 
@@ -71,7 +72,9 @@ C:\raylib\w64devkit\bin\mingw32-make.exe clean
 | Contexto | Acción | Control |
 |---|---|---|
 | Menús | Confirmar | `Enter` |
+| Inicio | Abrir TryHard | `T` o botón `TRYHARD` |
 | Selector | Navegar | Flechas |
+| Selector | Abrir personaje | `C` |
 | Selector | Fácil / Normal / Difícil | `1` / `2` / `3` o ratón |
 | Personaje | Elegir color o accesorio | Ratón |
 | Partida | Mover | `A`/`D` o izquierda/derecha |
@@ -90,6 +93,9 @@ C:\raylib\w64devkit\bin\mingw32-make.exe clean
 5. Alcanzar la meta de líneas completa el nivel y desbloquea su recompensa.
 6. `SaveData` conserva el siguiente nivel, accesorios, aspecto y récords.
 7. La escena se dibuja en `RenderTexture2D` y después pasa por el shader del nivel.
+
+`TryHard` permite probar los diez niveles y los once accesorios sin alterar el
+progreso, los récords ni la apariencia guardada de la partida normal.
 
 ## Estructura
 
