@@ -49,8 +49,8 @@ Requiere Raylib en `C:/raylib/raylib` y w64devkit en
 C:\raylib\w64devkit\bin\mingw32-make.exe
 ```
 
-Los archivos intermedios se generan en `build/release/` y el ejecutable final
-queda disponible como `main.exe` y `bin/red_shift_tetris.exe`.
+Los archivos intermedios se generan en `build/release/` y el único ejecutable
+final queda disponible como `bin/red_shift_tetris.exe`.
 
 Para compilar una versión de depuración, con símbolos y sin optimizaciones:
 
@@ -65,7 +65,7 @@ C:\raylib\w64devkit\bin\mingw32-make.exe clean
 ```
 
 ```powershell
-.\main.exe
+.\bin\red_shift_tetris.exe
 ```
 
 ## Controles

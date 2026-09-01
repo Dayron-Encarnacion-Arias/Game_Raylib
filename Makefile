@@ -390,7 +390,6 @@ SRC = src/main.cpp \
 OBJS = $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(SRC))
 DEPS = $(OBJS:.o=.d)
 OUTPUT = bin/$(PROJECT_NAME)$(EXT)
-ROOT_OUTPUT = main$(EXT)
 
 # For Android platform we call a custom Makefile.Android
 ifeq ($(PLATFORM),PLATFORM_ANDROID)
@@ -406,7 +405,7 @@ ifeq ($(PLATFORM),PLATFORM_ANDROID)
 all:
 	$(MAKE) $(MAKEFILE_PARAMS)
 else
-all: $(OUTPUT) $(ROOT_OUTPUT)
+all: $(OUTPUT)
 endif
 
 # Link all project modules and write the final executable to bin/.
@@ -427,29 +426,21 @@ else
 endif
 	$(CC) -c $< -o $@ $(CFLAGS) $(INCLUDE_PATHS) -D$(PLATFORM)
 
-# Keep main.exe as a convenient entry point for the current VS Code workflow.
-$(ROOT_OUTPUT): $(OUTPUT)
-ifeq ($(OS),Windows_NT)
-	@powershell.exe -NoProfile -Command "Copy-Item -LiteralPath '$(OUTPUT)' -Destination '$(ROOT_OUTPUT)' -Force"
-else
-	@cp $(OUTPUT) $(ROOT_OUTPUT)
-endif
-
 # Build and launch the game.
 run: all
 ifeq ($(OS),Windows_NT)
-	$(ROOT_OUTPUT)
+	powershell.exe -NoProfile -Command "& '.\$(OUTPUT)'"
 else
-	./$(ROOT_OUTPUT)
+	./$(OUTPUT)
 endif
 
 # Clean generated files without removing build/.gitkeep.
 clean:
 ifeq ($(OS),Windows_NT)
-	@powershell.exe -NoProfile -Command "if (Test-Path -LiteralPath 'build/debug') { Remove-Item -LiteralPath 'build/debug' -Recurse -Force }; if (Test-Path -LiteralPath 'build/release') { Remove-Item -LiteralPath 'build/release' -Recurse -Force }; if (Test-Path -LiteralPath 'bin/$(PROJECT_NAME).exe') { Remove-Item -LiteralPath 'bin/$(PROJECT_NAME).exe' -Force }; if (Test-Path -LiteralPath 'main.exe') { Remove-Item -LiteralPath 'main.exe' -Force }"
+	@powershell.exe -NoProfile -Command "if (Test-Path -LiteralPath 'build/debug') { Remove-Item -LiteralPath 'build/debug' -Recurse -Force }; if (Test-Path -LiteralPath 'build/release') { Remove-Item -LiteralPath 'build/release' -Recurse -Force }; if (Test-Path -LiteralPath 'bin/$(PROJECT_NAME).exe') { Remove-Item -LiteralPath 'bin/$(PROJECT_NAME).exe' -Force }; if (Test-Path -LiteralPath 'bin/main.exe') { Remove-Item -LiteralPath 'bin/main.exe' -Force }; if (Test-Path -LiteralPath 'main.exe') { Remove-Item -LiteralPath 'main.exe' -Force }"
 else
 	@rm -rf build/debug build/release
-	@rm -f $(OUTPUT) $(ROOT_OUTPUT)
+	@rm -f $(OUTPUT) bin/main.exe main.exe
 endif
 	@echo Cleaning done
 

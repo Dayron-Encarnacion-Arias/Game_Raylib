@@ -8,8 +8,20 @@
 #include <array>
 #include <vector>
 
-enum class GameScreen { Title, LevelSelect, Customize, Playing, Result };
-enum class Difficulty { Easy, Normal, Hard };
+enum class GameScreen
+{
+    Title,
+    LevelSelect,
+    Customize,
+    Playing,
+    Result
+};
+enum class Difficulty
+{
+    Easy,
+    Normal,
+    Hard
+};
 
 // Coordina pantallas, reglas, progreso y recursos graficos del juego completo.
 class Game

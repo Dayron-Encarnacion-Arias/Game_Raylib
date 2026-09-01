@@ -2,7 +2,11 @@
 
 #include <raylib.h>
 
-enum class CharacterType { Operator = 0, CrimsonCadet = 1 };
+enum class CharacterType
+{
+    Operator = 0,
+    CrimsonCadet = 1
+};
 
 // Guarda la apariencia elegida y sabe dibujar el avatar en diferentes poses.
 class Character
