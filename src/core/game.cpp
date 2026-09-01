@@ -9,6 +9,7 @@ Game::Game(bool smokeTest)
     this->smokeTest = smokeTest;
     smokeFrame = 0;
     screen = GameScreen::Title;
+    customizeReturnScreen = GameScreen::Title;
     difficulty = Difficulty::Normal;
     selectedLevel = 0;
     score = 0;
@@ -19,6 +20,8 @@ Game::Game(bool smokeTest)
     paused = false;
     won = false;
     newUnlock = false;
+    characterDropAttempted = false;
+    newCharacterUnlock = false;
     tryHardMode = false;
     levels = GetAllLevels();
     blocks = GetAllBlocks();
@@ -27,6 +30,7 @@ Game::Game(bool smokeTest)
     saveData.Load("saves/progress.dat");
     character.SetBodyColor(saveData.selectedColor);
     character.SetAccessory(saveData.selectedAccessory);
+    character.SetType(saveData.selectedCharacter);
     for (int index = 0; index < 10; index++)
         shaders[index] = LoadShader(nullptr, TextFormat("shaders/level_%02i.fs", index + 1));
     renderTarget = LoadRenderTexture(screenWidth, screenHeight);
@@ -41,6 +45,7 @@ Game::~Game()
     {
         saveData.selectedColor = character.GetBodyColor();
         saveData.selectedAccessory = character.GetAccessory();
+        saveData.selectedCharacter = character.GetType();
     }
     if (!smokeTest)
         saveData.Save("saves/progress.dat");
@@ -99,6 +104,8 @@ void Game::Draw()
         TakeScreenshot("assets/preview.png");
     if (smokeTest && smokeFrame == 11)
         TakeScreenshot("build/tryhard_preview.png");
+    if (smokeTest && smokeFrame == 12)
+        TakeScreenshot("build/exclusive_preview.png");
 }
 
 // Informa a main cuando la prueba automatica ya recorrio todas las pantallas.
@@ -112,32 +119,36 @@ void Game::UpdateTitle()
 {
     if (IsKeyPressed(KEY_ENTER))
     {
-        tryHardMode = false;
         screen = GameScreen::LevelSelect;
         screenTime = 0;
         return;
     }
     if (IsKeyPressed(KEY_T))
     {
-        EnterTryHard();
+        if (tryHardMode)
+            ExitTryHard();
+        else
+            EnterTryHard();
         return;
     }
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
         return;
     const Vector2 mouse = GetMousePosition();
-    if (CheckCollisionPointRec(mouse, {550, 345, 250, 54}))
+    if (CheckCollisionPointRec(mouse, {550, 350, 250, 54}))
     {
-        tryHardMode = false;
         screen = GameScreen::LevelSelect;
     }
-    else if (CheckCollisionPointRec(mouse, {550, 415, 250, 54}))
+    else if (CheckCollisionPointRec(mouse, {550, 420, 250, 54}))
     {
-        tryHardMode = false;
+        customizeReturnScreen = GameScreen::Title;
         screen = GameScreen::Customize;
     }
-    else if (CheckCollisionPointRec(mouse, {550, 485, 250, 54}))
+    else if (CheckCollisionPointRec(mouse, {550, 490, 250, 64}))
     {
-        EnterTryHard();
+        if (tryHardMode)
+            ExitTryHard();
+        else
+            EnterTryHard();
         return;
     }
     else
@@ -150,15 +161,13 @@ void Game::UpdateLevelSelect()
 {
     if (IsKeyPressed(KEY_ESCAPE))
     {
-        if (tryHardMode)
-            ExitTryHard();
-        else
-            screen = GameScreen::Title;
+        screen = GameScreen::Title;
         screenTime = 0;
         return;
     }
     if (IsKeyPressed(KEY_C))
     {
+        customizeReturnScreen = GameScreen::LevelSelect;
         screen = GameScreen::Customize;
         screenTime = 0;
         return;
@@ -194,30 +203,34 @@ void Game::UpdateCustomize()
 {
     if (IsKeyPressed(KEY_ESCAPE))
     {
-        if (tryHardMode)
-            screen = GameScreen::LevelSelect;
-        else
+        if (!tryHardMode)
         {
             saveData.selectedColor = character.GetBodyColor();
             saveData.selectedAccessory = character.GetAccessory();
+            saveData.selectedCharacter = character.GetType();
             saveData.Save("saves/progress.dat");
-            screen = GameScreen::Title;
         }
+        screen = customizeReturnScreen;
         screenTime = 0;
         return;
     }
-    if (IsKeyPressed(KEY_LEFT))
+    if (character.GetType() == 0 && IsKeyPressed(KEY_LEFT))
         character.SetBodyColor((character.GetBodyColor() + 4) % 5);
-    if (IsKeyPressed(KEY_RIGHT))
+    if (character.GetType() == 0 && IsKeyPressed(KEY_RIGHT))
         character.SetBodyColor((character.GetBodyColor() + 1) % 5);
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
         return;
     const Vector2 mouse = GetMousePosition();
+    for (int index = 0; index < 2; index++)
+        if (CheckCollisionPointRec(mouse, {525.0f + index * 280, 151, 250, 44}) &&
+            IsCharacterAvailable(index))
+            character.SetType(index);
     for (int index = 0; index < 5; index++)
-        if (CheckCollisionPointCircle(mouse, {565.0f + index * 125, 211}, 40))
+        if (character.GetType() == 0 && CheckCollisionPointCircle(mouse, {565.0f + index * 125, 258}, 34))
             character.SetBodyColor(index);
     for (int index = 0; index < 11; index++)
-        if (CheckCollisionPointRec(mouse, {525.0f + (index % 3) * 225, 351.0f + (index / 3) * 66, 207, 52}) &&
+        if (character.GetType() == 0 &&
+            CheckCollisionPointRec(mouse, {525.0f + (index % 3) * 225, 367.0f + (index / 3) * 64, 207, 48}) &&
             IsAccessoryAvailable(index))
             character.SetAccessory(index);
 }
@@ -257,7 +270,10 @@ void Game::UpdateResult()
     if (IsKeyPressed(KEY_R))
         StartLevel();
     if (IsKeyPressed(KEY_C))
+    {
+        customizeReturnScreen = GameScreen::LevelSelect;
         screen = GameScreen::Customize;
+    }
 }
 
 // Traduce las teclas de juego a operaciones privadas sobre el bloque actual.
@@ -384,10 +400,19 @@ void Game::CompleteLevel()
 {
     won = true;
     newUnlock = false;
+    characterDropAttempted = false;
+    newCharacterUnlock = false;
     if (!tryHardMode)
     {
         newUnlock = !saveData.IsAccessoryUnlocked(selectedLevel + 1);
         saveData.UnlockReward(selectedLevel);
+        if (selectedLevel == 6 && !saveData.IsCharacterUnlocked(1))
+        {
+            characterDropAttempted = true;
+            newCharacterUnlock = GetRandomValue(1, 100) <= GetExclusiveDropChance();
+            if (newCharacterUnlock)
+                saveData.UnlockCharacter(1);
+        }
         saveData.RegisterScore(selectedLevel, score);
         saveData.Save("saves/progress.dat");
     }
@@ -399,6 +424,8 @@ void Game::EndGame()
 {
     won = false;
     newUnlock = false;
+    characterDropAttempted = false;
+    newCharacterUnlock = false;
     if (!tryHardMode)
     {
         saveData.RegisterScore(selectedLevel, score);
@@ -418,24 +445,26 @@ void Game::ResetBoard()
     lines = 0;
     combo = -1;
     fallTimer = 0;
+    characterDropAttempted = false;
+    newCharacterUnlock = false;
 }
 
-// Activa una sesion administrativa temporal con niveles y accesorios disponibles.
+// Activa el interruptor administrativo sin abandonar la pantalla de inicio.
 void Game::EnterTryHard()
 {
     tryHardMode = true;
-    selectedLevel = 0;
-    screen = GameScreen::LevelSelect;
     screenTime = 0;
 }
 
 // Sale de TryHard y recupera la apariencia guardada de la partida normal.
 void Game::ExitTryHard()
 {
+    character.SetType(0);
     character.SetBodyColor(saveData.selectedColor);
     character.SetAccessory(saveData.selectedAccessory);
+    character.SetType(saveData.selectedCharacter);
     tryHardMode = false;
-    screen = GameScreen::Title;
+    screenTime = 0;
 }
 
 // Considera todos los niveles disponibles mientras TryHard esta activo.
@@ -448,6 +477,22 @@ bool Game::IsLevelAvailable(int level) const
 bool Game::IsAccessoryAvailable(int accessory) const
 {
     return tryHardMode || saveData.IsAccessoryUnlocked(accessory);
+}
+
+// Considera disponibles los personajes exclusivos al activar TryHard.
+bool Game::IsCharacterAvailable(int characterIndex) const
+{
+    return tryHardMode || saveData.IsCharacterUnlocked(characterIndex);
+}
+
+// Devuelve la probabilidad del personaje exclusivo segun la dificultad elegida.
+int Game::GetExclusiveDropChance() const
+{
+    if (difficulty == Difficulty::Easy)
+        return 15;
+    if (difficulty == Difficulty::Hard)
+        return 50;
+    return 30;
 }
 
 // Suma puntos por filas y por descenso manual, incluyendo bonus de combo.
@@ -505,17 +550,21 @@ void Game::DrawTitle() const
     DrawCentered("CONSTRUYE / SOBREVIVE / DESBLOQUEA", screenWidth / 2, 254, 17, mutedText);
     character.Draw({360, 430}, 2.15f, 1, screenTime);
     DrawPanel({520, 315, 310, 300}, mainRed);
-    Rectangle play = {550, 345, 250, 54};
-    Rectangle customize = {550, 415, 250, 54};
-    Rectangle tryHard = {550, 485, 250, 54};
+    Rectangle play = {550, 350, 250, 54};
+    Rectangle customize = {550, 420, 250, 54};
+    Rectangle tryHard = {550, 490, 250, 64};
     DrawRectangleRounded(play, 0.18f, 8, CheckCollisionPointRec(GetMousePosition(), play) ? mainRed : Color{37, 25, 31, 255});
     DrawRectangleRounded(customize, 0.18f, 8, CheckCollisionPointRec(GetMousePosition(), customize) ? lightRed : Color{37, 25, 31, 255});
-    DrawRectangleRounded(tryHard, 0.18f, 8, CheckCollisionPointRec(GetMousePosition(), tryHard) ? GOLD : Color{37, 25, 31, 255});
-    DrawRectangleRoundedLinesEx(tryHard, 0.18f, 8, 2, GOLD);
-    DrawCentered("JUGAR", 675, 362, 20, WHITE);
-    DrawCentered("PERSONAJE", 675, 432, 20, WHITE);
-    DrawCentered("TRYHARD", 675, 502, 20, GOLD);
-    DrawCentered("ENTER: jugar | T: todo desbloqueado", 675, 565, 14, mutedText);
+    DrawRectangleRounded(tryHard, 0.18f, 8, Color{37, 25, 31, 255});
+    DrawRectangleRoundedLinesEx(tryHard, 0.18f, 8, 2, tryHardMode ? GOLD : mutedText);
+    DrawCentered("JUGAR", 675, 367, 20, WHITE);
+    DrawCentered("PERSONAJE", 675, 437, 20, WHITE);
+    DrawText("TRYHARD", 568, 512, 18, tryHardMode ? GOLD : WHITE);
+    Rectangle switchTrack = {716, 507, 62, 30};
+    DrawRectangleRounded(switchTrack, 1.0f, 12, tryHardMode ? GOLD : Color{77, 67, 72, 255});
+    DrawCircle(tryHardMode ? 762 : 732, 522, 11, tryHardMode ? BLACK : WHITE);
+    DrawCentered(tryHardMode ? "ACTIVO: todo disponible" : "INACTIVO: progreso normal", 675, 572, 13,
+                 tryHardMode ? GOLD : mutedText);
 }
 
 // Dibuja diez tarjetas con un escenario de pose para el personaje en cada una.
@@ -545,6 +594,8 @@ void Game::DrawLevelSelect() const
     DrawText("RECOMPENSA", 73, 465, 14, level.GetPrimaryColor());
     DrawText(level.GetReward().c_str(), 73, 490, 23, WHITE);
     DrawText(TextFormat("META: %i LINEAS", level.GetTargetLines()), 73, 545, 17, mutedText);
+    if (selectedLevel == 6 && !IsCharacterAvailable(1))
+        DrawText(TextFormat("CADETE CARMESI: %i%%", GetExclusiveDropChance()), 73, 579, 14, GOLD);
     DrawText("DIFICULTAD DEL NIVEL", 469, 371, 16, mutedText);
     for (int index = 0; index < 3; index++)
     {
@@ -560,7 +611,7 @@ void Game::DrawLevelSelect() const
                  IsLevelAvailable(selectedLevel) ? level.GetPrimaryColor() : mutedText);
 }
 
-// Dibuja la vista previa, cinco colores y once ranuras de accesorios.
+// Dibuja selector de personaje, colores y accesorios compatibles.
 void Game::DrawCustomize() const
 {
     levels[2].DrawMap(screenTime, screenWidth, screenHeight);
@@ -570,28 +621,44 @@ void Game::DrawCustomize() const
     DrawCentered("VISTA PREVIA", 260, 139, 18, mutedText);
     character.Draw({260, 340}, 3.9f, 1, screenTime);
     static const char *names[11] = {"Sin accesorio", "Visor rojo", "Gorra rebelde", "Audifonos", "Antena", "Corona", "Capa", "Llave mecanica", "Halo", "Cuernos", "Mascara legendaria"};
-    DrawCentered(names[character.GetAccessory()], 260, 568, 24, WHITE);
-    DrawPanel({495, 110, 730, 155}, lightRed);
-    DrawText("COLOR DEL CUERPO", 525, 135, 18, WHITE);
+    DrawCentered(character.GetType() == 1 ? "CADETE CARMESI" : names[character.GetAccessory()], 260, 568, 24, WHITE);
+    DrawPanel({495, 110, 730, 184}, lightRed);
+    DrawText("PERSONAJE", 525, 124, 17, WHITE);
+    static const char *characterNames[2] = {"Operador", "Cadete Carmesi"};
+    for (int index = 0; index < 2; index++)
+    {
+        Rectangle option = {525.0f + index * 280, 151, 250, 44};
+        const bool available = IsCharacterAvailable(index);
+        const bool selected = character.GetType() == index;
+        DrawPanel(option, selected ? GOLD : lightRed, selected);
+        DrawCentered(available ? characterNames[index] : "??? / NIVEL 07", option.x + option.width / 2,
+                     option.y + 13, 15, available ? (selected ? WHITE : mutedText) : Color{74, 65, 70, 255});
+    }
+    DrawText(character.GetType() == 0 ? "COLOR DEL CUERPO" : "COLOR FIJO DEL EXCLUSIVO", 525, 211, 16,
+             character.GetType() == 0 ? WHITE : mutedText);
     const std::vector<Color> colors = GetCharacterColors();
     for (int index = 0; index < 5; index++)
     {
-        Vector2 point = {565.0f + index * 125, 211};
-        DrawCircleV(point, character.GetBodyColor() == index ? 34 : 28,
-                    character.GetBodyColor() == index ? WHITE : colors[index]);
-        DrawCircleV(point, 24, colors[index]);
+        Vector2 point = {565.0f + index * 125, 258};
+        const bool editable = character.GetType() == 0;
+        DrawCircleV(point, editable && character.GetBodyColor() == index ? 29 : 25,
+                    editable && character.GetBodyColor() == index ? WHITE : Fade(colors[index], editable ? 1.0f : 0.25f));
+        DrawCircleV(point, 21, Fade(colors[index], editable ? 1.0f : 0.25f));
     }
-    DrawPanel({495, 288, 730, 357}, mainRed);
-    DrawText("ACCESORIOS", 525, 313, 18, WHITE);
+    DrawPanel({495, 312, 730, 333}, mainRed);
+    DrawText(character.GetType() == 0 ? "ACCESORIOS" : "ACCESORIOS PERMANENTES / NO COMPATIBLE", 525, 331, 17,
+             character.GetType() == 0 ? WHITE : GOLD);
     for (int index = 0; index < 11; index++)
     {
-        Rectangle item = {525.0f + (index % 3) * 225, 351.0f + (index / 3) * 66, 207, 52};
-        bool unlocked = IsAccessoryAvailable(index), selected = character.GetAccessory() == index;
+        Rectangle item = {525.0f + (index % 3) * 225, 367.0f + (index / 3) * 64, 207, 48};
+        bool unlocked = IsAccessoryAvailable(index) && character.GetType() == 0;
+        bool selected = character.GetType() == 0 && character.GetAccessory() == index;
         DrawPanel(item, selected ? lightRed : darkRed, selected);
-        DrawText(unlocked ? names[index] : TextFormat("Nivel %02i", index), item.x + 12, item.y + 17, 15,
+        const char *label = character.GetType() == 1 ? names[index] : (unlocked ? names[index] : TextFormat("Nivel %02i", index));
+        DrawText(label, item.x + 12, item.y + 15, 15,
                  unlocked ? (selected ? WHITE : mutedText) : Color{74, 65, 70, 255});
-        if (!unlocked)
-            DrawText("X", item.x + 178, item.y + 16, 17, mainRed);
+        if (!unlocked && character.GetType() == 0)
+            DrawText("X", item.x + 178, item.y + 14, 17, mainRed);
     }
 }
 
@@ -604,7 +671,7 @@ void Game::DrawPlaying() const
                TextFormat("%s%s | ESC: pausa", tryHardMode ? "TRYHARD | " : "", GetDifficultyName()));
     DrawPanel({54, 112, 360, 560}, level.GetPrimaryColor());
     character.Draw({234, 250}, 2.1f, selectedLevel, screenTime);
-    DrawCentered("OPERADOR", 234, 335, 15, mutedText);
+    DrawCentered(character.GetType() == 1 ? "CADETE CARMESI" : "OPERADOR", 234, 335, 15, mutedText);
     DrawText("PUNTUACION", 86, 383, 14, mutedText);
     DrawText(TextFormat("%07i", score), 86, 408, 35, WHITE);
     DrawText("LINEAS", 86, 475, 14, mutedText);
@@ -624,6 +691,8 @@ void Game::DrawPlaying() const
     DrawText("RECOMPENSA", 899, 477, 14, level.GetPrimaryColor());
     DrawText(level.GetReward().c_str(), 899, 505, 20, WHITE);
     DrawText("Completa la meta para desbloquearla", 899, 554, 14, mutedText);
+    if (selectedLevel == 6 && !IsCharacterAvailable(1))
+        DrawText(TextFormat("Exclusivo: %i%% en esta dificultad", GetExclusiveDropChance()), 899, 590, 14, GOLD);
     if (paused)
     {
         DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.78f));
@@ -645,7 +714,15 @@ void Game::DrawResult() const
     DrawCentered(level.GetName().c_str(), screenWidth / 2, 194, 18, mutedText);
     Character rewardCharacter = character;
     if (won)
-        rewardCharacter.SetAccessory(selectedLevel + 1);
+    {
+        if (newCharacterUnlock)
+            rewardCharacter.SetType(1);
+        else
+        {
+            rewardCharacter.SetType(0);
+            rewardCharacter.SetAccessory(selectedLevel + 1);
+        }
+    }
     rewardCharacter.Draw({460, 360}, 2.55f, won ? 1 : 2, screenTime);
     DrawText("PUNTUACION", 605, 279, 14, mutedText);
     DrawText(TextFormat("%07i", score), 605, 306, 36, WHITE);
@@ -659,7 +736,14 @@ void Game::DrawResult() const
     }
     else
         DrawText("La pila llego al limite", 605, 478, 15, mutedText);
-    DrawCentered("ENTER: niveles | R: repetir | C: personalizar", screenWidth / 2, 580, 16, mutedText);
+    if (characterDropAttempted)
+    {
+        DrawText(newCharacterUnlock ? "CADETE CARMESI DESBLOQUEADO" : "EL EXCLUSIVO NO APARECIO",
+                 605, 526, 15, newCharacterUnlock ? GOLD : mutedText);
+        if (!newCharacterUnlock)
+            DrawText(TextFormat("Probabilidad %i%% / repite el nivel", GetExclusiveDropChance()), 605, 550, 13, mutedText);
+    }
+    DrawCentered("ENTER: niveles | R: repetir | C: personalizar", screenWidth / 2, 598, 16, mutedText);
 }
 
 // Dibuja un contenedor oscuro con borde de seleccion opcional.
@@ -720,7 +804,7 @@ void Game::AdvanceSmokeTest()
         EnterTryHard();
     else if (smokeFrame == 11)
     {
-        character.SetAccessory(5);
+        character.SetType(1);
         screen = GameScreen::Customize;
     }
     else if (smokeFrame == 12)

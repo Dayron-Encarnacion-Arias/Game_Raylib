@@ -43,6 +43,8 @@ private:
     void ExitTryHard();
     bool IsLevelAvailable(int level) const;
     bool IsAccessoryAvailable(int accessory) const;
+    bool IsCharacterAvailable(int character) const;
+    int GetExclusiveDropChance() const;
     void UpdateScore(int clearedRows, int dropPoints);
     Block GetRandomBlock();
     std::vector<Block> GetAllBlocks() const;
@@ -75,6 +77,7 @@ private:
     std::vector<Level> levels;
     SaveData saveData;
     GameScreen screen;
+    GameScreen customizeReturnScreen;
     Difficulty difficulty;
     int selectedLevel;
     int score;
@@ -85,6 +88,8 @@ private:
     bool paused;
     bool won;
     bool newUnlock;
+    bool characterDropAttempted;
+    bool newCharacterUnlock;
     bool tryHardMode;
     bool smokeTest;
     int smokeFrame;

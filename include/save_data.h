@@ -12,12 +12,16 @@ public:
     void Save(const std::string &path) const;
     bool IsLevelUnlocked(int level) const;
     bool IsAccessoryUnlocked(int accessory) const;
+    bool IsCharacterUnlocked(int character) const;
     void UnlockReward(int level);
+    void UnlockCharacter(int character);
     void RegisterScore(int level, int score);
 
     int highestLevel;
     unsigned int accessoryMask;
+    unsigned int characterMask;
     int selectedAccessory;
     int selectedColor;
+    int selectedCharacter;
     std::array<int, 10> bestScores;
 };
